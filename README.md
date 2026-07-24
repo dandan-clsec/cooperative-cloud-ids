@@ -138,3 +138,6 @@ Accuracy = TP / (TP + FP + FN) * 100
 - Detection accuracy depends on ruleset freshness — run `scripts/fetch_rules.sh`
   to pull the full Emerging Threats Open ruleset.
 ```
+
+
+GITHUB REPOSITORY LINK: https://github.com/dandan-clsec/cooperative-cloud-ids
