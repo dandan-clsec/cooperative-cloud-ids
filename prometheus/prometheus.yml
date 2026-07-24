@@ -1,0 +1,18 @@
+# Prometheus scrape configuration for the Cooperative IDS Framework.
+# High-resolution 5-second polling of Node Exporter, matching the methodology
+# in Chapter 3 (Prometheus polling Node Exporter at a 5-second interval).
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          host: 'vm1'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

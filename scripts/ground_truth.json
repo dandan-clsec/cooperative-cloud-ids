@@ -1,0 +1,34 @@
+{
+  "description": "Injected attack ground truth for OR-merge validation. Each event is one atomic attack the orchestrator launched from VM2 (the Kali attacker). validator.py scores engine alerts against these events.",
+  "target_ip": "172.20.0.20",
+  "attacker_ip": "172.20.0.99",
+  "events": [
+    {
+      "id": "dos-01",
+      "attack_type": "dos",
+      "tool": "hping3",
+      "command": "hping3 -S --flood -V -p 80 172.20.0.20",
+      "dst_port": 80,
+      "signatures": ["SYN flood", "attempted-dos", "DoS"],
+      "sids": [1000001, 1000002]
+    },
+    {
+      "id": "sqli-01",
+      "attack_type": "sqli",
+      "tool": "sqlmap",
+      "command": "sqlmap -u 'http://172.20.0.20:80/vulnerabilities/sqli/?id=1&Submit=Submit' --batch --level=2",
+      "dst_port": 80,
+      "signatures": ["SQL Injection", "union", "sqlmap", "web-application-attack"],
+      "sids": [1000010, 1000011, 1000012, 1000013]
+    },
+    {
+      "id": "brute-01",
+      "attack_type": "bruteforce",
+      "tool": "hydra",
+      "command": "hydra -l root -P rockyou.txt ssh://172.20.0.20:22 -t 4",
+      "dst_port": 22,
+      "signatures": ["SSH brute force", "attempted-admin", "brute force"],
+      "sids": [1000020, 1000021]
+    }
+  ]
+}

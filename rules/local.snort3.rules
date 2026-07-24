@@ -1,0 +1,39 @@
+# =============================================================================
+# Snort 3 dialect copy of local.rules - Cooperative Cloud IDS Framework
+# -----------------------------------------------------------------------------
+# Snort 3 rule syntax diverges from the Suricata dialect used in local.rules:
+#   - sticky buffers use underscores (http_uri) not dots (http.uri)
+#   - nocase/distance/within/offset are comma-separated sub-parameters of
+#     content (content:"foo", nocase, distance 0;), while http_uri itself
+#     stays a standalone sticky-buffer option after the content it modifies
+#   - there is no http_user_agent buffer; match the User-Agent header via
+#     http_header:field User-Agent;
+#   - per-rule rate limiting is "detection_filter" (no "type" field), not the
+#     combined "threshold:type ...,track ...,count ...,seconds ..." option
+# Same detections/SIDs as local.rules, kept in sync manually when rules change.
+# =============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Denial of Service - TCP SYN flood (Hping3 -S --flood -p 8080)
+# ----------------------------------------------------------------------------
+alert tcp $EXTERNAL_NET any -> $HOME_NET 80 (msg:"COOP-IDS DoS TCP SYN flood detected"; flags:S,12; flow:stateless; detection_filter:track by_dst, count 100, seconds 1; classtype:attempted-dos; sid:1000001; rev:2;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg:"COOP-IDS DoS high-rate SYN to service port"; flags:S; detection_filter:track by_src, count 200, seconds 2; classtype:attempted-dos; sid:1000002; rev:1;)
+
+# ----------------------------------------------------------------------------
+# 2. SQL Injection - against DVWA (SQLMap payload patterns)
+# ----------------------------------------------------------------------------
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"COOP-IDS SQL Injection UNION SELECT"; flow:to_server,established; content:"union", nocase; http_uri; content:"select", nocase, distance 0; http_uri; classtype:web-application-attack; sid:1000010; rev:2;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"COOP-IDS SQL Injection boolean/tautology (OR 1=1)"; flow:to_server,established; content:"or", nocase; http_uri; pcre:"/or\s+1\s*=\s*1/i"; classtype:web-application-attack; sid:1000011; rev:2;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"COOP-IDS SQL Injection comment/probe chars"; flow:to_server,established; http_uri; pcre:"/(\%27|\')(\s)*(--|\#|\/\*)/i"; classtype:web-application-attack; sid:1000012; rev:1;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"COOP-IDS SQLMap user-agent"; flow:to_server,established; content:"sqlmap", nocase; http_header:field User-Agent; classtype:web-application-attack; sid:1000013; rev:1;)
+
+# ----------------------------------------------------------------------------
+# 3. SSH Brute Force - against the target SSH daemon (Hydra)
+# ----------------------------------------------------------------------------
+alert tcp $EXTERNAL_NET any -> $SSH_SERVERS 22 (msg:"COOP-IDS SSH brute force - repeated connection attempts"; flow:to_server; flags:S; detection_filter:track by_src, count 5, seconds 30; classtype:attempted-admin; sid:1000020; rev:2;)
+
+alert ssh $EXTERNAL_NET any -> $SSH_SERVERS 22 (msg:"COOP-IDS SSH brute force - rapid auth sessions"; flow:to_server,established; detection_filter:track by_src, count 5, seconds 60; classtype:attempted-admin; sid:1000021; rev:1;)

@@ -1,0 +1,101 @@
+%YAML 1.1
+---
+# =============================================================================
+# Suricata 7 configuration for the Cooperative Cloud IDS Framework.
+# Multi-threaded (workers runmode), protocol-aware (HTTP/SSH), dual output:
+#   - eve.json      : structured JSON events (machine parsed by validator.py)
+#   - fast.log      : text alerts (mirrors snort's alert_fast format)
+# =============================================================================
+
+vars:
+  address-groups:
+    HOME_NET: "[172.18.0.0/16]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SSH_SERVERS: "$HOME_NET"
+  port-groups:
+    HTTP_PORTS: "80,8080"
+    SSH_PORTS: "22"
+
+default-log-dir: /var/log/suricata
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+outputs:
+  # Unified JSON event log.
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert:
+            payload: yes
+            payload-printable: yes
+            http: yes
+            metadata: yes
+        - http:
+            extended: yes
+        - ssh
+        - flow
+
+  # Plain-text alert log written to suricata.log for symmetry with Snort.
+  - fast:
+      enabled: yes
+      filename: suricata.log
+      append: yes
+
+  - stats:
+      enabled: yes
+      filename: stats.log
+      interval: 8
+
+# ---------------------------------------------------------------------------
+# Application-layer protocol parsers
+# ---------------------------------------------------------------------------
+app-layer:
+  protocols:
+    http:
+      enabled: yes
+    ssh:
+      enabled: yes
+    tls:
+      enabled: yes
+    dns:
+      enabled: yes
+
+# ---------------------------------------------------------------------------
+# Rule ingestion - shared Emerging Threats Open ruleset directory.
+# ---------------------------------------------------------------------------
+default-rule-path: /var/lib/suricata/rules
+rule-files:
+  - local.rules
+
+classification-file: /etc/suricata/classification.config
+reference-config-file: /etc/suricata/reference.config
+
+# ---------------------------------------------------------------------------
+# Multi-threaded capture (workers runmode).
+# Each worker thread runs the full packet pipeline in parallel across cores.
+# ---------------------------------------------------------------------------
+af-packet:
+  - interface: eth0
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+    threads: auto          # scale across available vCPUs
+
+threading:
+  set-cpu-affinity: no
+  detect-thread-ratio: 1.0
+
+# Passive: detect and alert only. IPS/blocking is intentionally disabled.
+runmode: workers
+
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: yes

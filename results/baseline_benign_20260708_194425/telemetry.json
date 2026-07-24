@@ -1,0 +1,18 @@
+{
+  "condition": "baseline",
+  "attack": null,
+  "start_utc": "2026-07-08T19:44:25.317389+00:00",
+  "end_utc": "2026-07-08T19:54:28.219211+00:00",
+  "duration_s": 602.9,
+  "interface": "docker0",
+  "resource": {
+    "avg_cpu_pct": 0.0,
+    "avg_memory_mb": 0.0
+  },
+  "packets": {
+    "packets_seen": 0,
+    "packets_dropped": 0,
+    "loss_rate_pct": 0.0
+  },
+  "results_dir": "/home/de-elite/Desktop/De-elite Files/Jobs/Dandan/Project/cooperative-ids/results/baseline_benign_20260708_194425"
+}

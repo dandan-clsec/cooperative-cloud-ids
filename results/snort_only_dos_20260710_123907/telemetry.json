@@ -1,0 +1,18 @@
+{
+  "condition": "snort_only",
+  "attack": "dos",
+  "start_utc": "2026-07-10T12:39:12.566496+00:00",
+  "end_utc": "2026-07-10T12:39:29.582310+00:00",
+  "duration_s": 17.0,
+  "interface": "br-0254e40e390f",
+  "resource": {
+    "avg_cpu_pct": 15.38,
+    "avg_memory_mb": 11518.14
+  },
+  "packets": {
+    "packets_seen": 232,
+    "packets_dropped": 0,
+    "loss_rate_pct": 0.0
+  },
+  "results_dir": "/home/de-elite/Desktop/De-elite Files/Jobs/Dandan/Project/cooperative-ids/results/snort_only_dos_20260710_123907"
+}

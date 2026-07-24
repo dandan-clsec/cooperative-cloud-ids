@@ -1,0 +1,18 @@
+{
+  "condition": "snort_only",
+  "attack": "sqli",
+  "start_utc": "2026-07-10T15:41:30.158005+00:00",
+  "end_utc": "2026-07-10T15:43:30.161418+00:00",
+  "duration_s": 120.0,
+  "interface": "br-c6b4ce27bcc1",
+  "resource": {
+    "avg_cpu_pct": 22.97,
+    "avg_memory_mb": 1541.76
+  },
+  "packets": {
+    "packets_seen": 0,
+    "packets_dropped": 0,
+    "loss_rate_pct": 0.0
+  },
+  "results_dir": "C:\\Users\\user\\OneDrive\\Desktop\\cooperative-ids\\results\\snort_only_sqli_20260710_154123"
+}

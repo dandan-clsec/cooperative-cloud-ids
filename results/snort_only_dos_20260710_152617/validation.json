@@ -1,0 +1,15 @@
+{
+  "condition": "snort_only",
+  "true_positives": 0,
+  "false_positives": 0,
+  "false_negatives": 3,
+  "accuracy_pct": 0.0,
+  "detected_events": [],
+  "missed_events": [
+    "dos-01",
+    "sqli-01",
+    "brute-01"
+  ],
+  "snort_alerts": 0,
+  "suricata_alerts": 0
+}

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cooperative Cloud IDS · Control Panel</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3444;
+    --txt:#e6edf3; --muted:#8b98a9; --accent:#3fb950; --accent2:#58a6ff;
+    --warn:#d29922; --bad:#f85149; --chip:#21262d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);
+         display:flex;align-items:center;justify-content:space-between;gap:16px;
+         background:linear-gradient(180deg,#11161f,#0d1117)}
+  header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.2px}
+  header h1 span{color:var(--accent)}
+  .clock{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 24px;display:grid;gap:20px}
+  .grid{display:grid;gap:20px}
+  @media(min-width:900px){.grid.two{grid-template-columns:1fr 1fr}
+    .grid.side{grid-template-columns:340px 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h2{margin:0 0 14px;font-size:13px;text-transform:uppercase;
+           letter-spacing:.6px;color:var(--muted);font-weight:650}
+  /* status pills */
+  .svc{display:flex;align-items:center;justify-content:space-between;
+       padding:9px 12px;border-radius:8px;background:var(--panel2);margin-bottom:8px}
+  .svc:last-child{margin-bottom:0}
+  .svc .n{font-weight:550}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.running{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .dot.exited{background:var(--muted)}
+  .dot.absent{background:var(--bad)}
+  .svc small{color:var(--muted);font-size:11px}
+  /* metrics */
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .metric{background:var(--panel2);border-radius:10px;padding:14px}
+  .metric .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+  .metric .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .bar{height:6px;border-radius:4px;background:#0c1017;margin-top:8px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--accent2);transition:width .4s}
+  /* controls */
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+  select,input{width:100%;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:14px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--chip);
+    color:var(--txt);border-radius:8px;padding:10px 14px;font-weight:600;
+    cursor:pointer;font-size:13px;transition:.15s}
+  .btn:hover{border-color:var(--accent2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#04260f}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+  /* console */
+  pre.console{background:#0a0d12;border:1px solid var(--line);border-radius:10px;
+    padding:14px;max-height:280px;overflow:auto;font-size:12px;
+    font-family:"SFMono-Regular",Consolas,monospace;color:#c9d4e3;white-space:pre-wrap;margin:0}
+  .cmd{font-family:monospace;font-size:12px;background:var(--panel2);
+    padding:8px 10px;border-radius:6px;color:var(--warn);margin-top:10px;word-break:break-all}
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;
+    background:var(--chip);border:1px solid var(--line)}
+  .acc{font-weight:700}
+  .acc.good{color:var(--accent)} .acc.mid{color:var(--warn)} .acc.low{color:var(--bad)}
+  .hint{color:var(--muted);font-size:12px;margin-top:6px}
+  .flash{position:fixed;bottom:20px;right:20px;background:var(--panel2);
+    border:1px solid var(--accent2);padding:12px 16px;border-radius:8px;
+    opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none}
+  .flash.show{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cooperative Cloud <span>IDS</span> · Snort 3 + Suricata 7</h1>
+  <div class="clock" id="clock">—</div>
+</header>
+
+<div class="wrap">
+
+  <!-- ENVIRONMENT -->
+  <div class="grid side">
+    <div class="card">
+      <h2>Environment</h2>
+      <div id="services"></div>
+      <div class="btnrow" style="margin-top:14px">
+        <button class="btn primary" onclick="compose('up')">▶ Stack Up</button>
+        <button class="btn ghost" onclick="compose('down')">■ Stack Down</button>
+        <button class="btn" onclick="mirror()">⇄ Install Mirror</button>
+      </div>
+      <p class="hint">Mirror install runs <code>sudo mirror_setup.sh</code> on the host.</p>
+    </div>
+
+    <div class="card">
+      <h2>Live Telemetry (Prometheus · 5s)</h2>
+      <div class="metrics">
+        <div class="metric">
+          <div class="l">CPU Usage</div>
+          <div class="v"><span id="cpuv">—</span><small style="font-size:14px">%</small></div>
+          <div class="bar"><i id="cpubar" style="width:0"></i></div>
+        </div>
+        <div class="metric">
+          <div class="l">Memory</div>
+          <div class="v"><span id="memv">—</span><small style="font-size:13px"> MB</small></div>
+          <div class="bar"><i id="membar" style="width:0"></i></div>
+        </div>
+      </div>
+      <p class="hint" id="promhint">Waiting for Prometheus…</p>
+    </div>
+  </div>
+
+  <!-- TRIAL RUNNER -->
+  <div class="grid two">
+    <div class="card">
+      <h2>Run a Trial</h2>
+      <div class="row">
+        <div>
+          <label>Condition</label>
+          <select id="condition" onchange="syncAttack()">
+            {% for c in conditions %}<option value="{{c}}">{{c}}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Attack Type</label>
+          <select id="attack">
+            {% for a in attacks %}<option value="{{a}}">{{a}}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Trial Window (seconds)</label>
+          <input id="duration" type="number" value="120" min="10" step="10">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn primary" id="runbtn" style="width:100%"
+                  onclick="runTrial()">Launch Trial</button>
+        </div>
+      </div>
+      <div class="cmd" id="attackcmd">—</div>
+      <p class="hint">When the window opens, run the shown command from the Kali
+        attacker node (or <code>scripts/attack.sh</code>). Validation runs
+        automatically when the trial finishes.</p>
+    </div>
+
+    <div class="card">
+      <h2>Job Console</h2>
+      <pre class="console" id="console">Idle. Launch a trial or bring the stack up.</pre>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="card">
+    <h2>Results History (OR-merge scoring)</h2>
+    <div style="overflow-x:auto">
+    <table id="results">
+      <thead><tr>
+        <th>Trial</th><th>Condition</th><th>Attack</th>
+        <th class="num">CPU %</th><th class="num">Mem MB</th>
+        <th class="num">Loss %</th><th class="num">TP/FP/FN</th>
+        <th class="num">Accuracy</th><th></th>
+      </tr></thead>
+      <tbody id="resbody">
+        <tr><td colspan="9" class="hint">No trials recorded yet.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let activeJob = null, jobTimer = null;
+
+function flash(msg){
+  const f=$('#flash'); f.textContent=msg; f.classList.add('show');
+  setTimeout(()=>f.classList.remove('show'),2600);
+}
+
+// ---- status + metrics poll ----
+async function poll(){
+  try{
+    const r = await fetch('/api/status'); const d = await r.json();
+    $('#clock').textContent = 'UTC '+d.time;
+    // services
+    const box=$('#services'); box.innerHTML='';
+    d.containers.forEach(c=>{
+      const state = c.state==='running'?'running':(c.state==='absent'?'absent':'exited');
+      box.insertAdjacentHTML('beforeend',
+        `<div class="svc"><span class="n"><span class="dot ${state}"></span>${c.name}</span>
+         <small>${c.status}</small></div>`);
+    });
+    // metrics
+    const m=d.metrics;
+    if(m.cpu_pct!=null){
+      $('#cpuv').textContent=m.cpu_pct;
+      $('#cpubar').style.width=Math.min(100,m.cpu_pct)+'%';
+      $('#promhint').textContent='Prometheus connected.';
+    }
+    if(m.mem_mb!=null){
+      $('#memv').textContent=Math.round(m.mem_mb);
+      const pct=m.mem_total_mb?Math.min(100,m.mem_mb/m.mem_total_mb*100):0;
+      $('#membar').style.width=pct+'%';
+    }
+    if(m.cpu_pct==null) $('#promhint').textContent='Prometheus not reachable — is the stack up?';
+  }catch(e){/* transient */}
+}
+
+// ---- results ----
+async function loadResults(){
+  const r=await fetch('/api/results'); const rows=await r.json();
+  const body=$('#resbody');
+  if(!rows.length){body.innerHTML='<tr><td colspan="9" class="hint">No trials recorded yet.</td></tr>';return;}
+  body.innerHTML='';
+  rows.forEach(x=>{
+    let acc='—',cls='';
+    if(x.accuracy!=null){acc=x.accuracy+'%';cls=x.accuracy>=95?'good':(x.accuracy>=85?'mid':'low');}
+    const tpfpfn = (x.tp!=null)?`${x.tp}/${x.fp}/${x.fn}`:'—';
+    body.insertAdjacentHTML('beforeend',
+      `<tr>
+        <td><small>${x.dir}</small></td>
+        <td><span class="tag">${x.condition||'—'}</span></td>
+        <td>${x.attack||'—'}</td>
+        <td class="num">${x.cpu??'—'}</td>
+        <td class="num">${x.mem!=null?Math.round(x.mem):'—'}</td>
+        <td class="num">${x.loss??'—'}</td>
+        <td class="num">${tpfpfn}</td>
+        <td class="num acc ${cls}">${acc}</td>
+        <td><button class="btn ghost" style="padding:4px 8px"
+             onclick="revalidate('${x.dir}','${x.condition}')">re-score</button></td>
+      </tr>`);
+  });
+}
+
+// ---- attack command hint ----
+let GT=null;
+async function loadGT(){ try{GT=await (await fetch('/api/ground_truth')).json();}catch(e){} syncAttack(); }
+function syncAttack(){
+  const cond=$('#condition').value;
+  const isBaseline = cond==='baseline';
+  $('#attack').disabled=isBaseline;
+  if(isBaseline){$('#attackcmd').textContent='baseline: 10 min benign traffic, no attack';return;}
+  const atk=$('#attack').value;
+  if(GT){const ev=GT.events.find(e=>e.attack_type===atk||e.attack_type===atk.replace('bruteforce','bruteforce'));
+    $('#attackcmd').textContent = ev?ev.command:'—';}
+}
+$('#attack').addEventListener('change',syncAttack);
+
+// ---- job streaming ----
+function watchJob(id,onDone){
+  activeJob=id;
+  clearInterval(jobTimer);
+  jobTimer=setInterval(async()=>{
+    const r=await fetch('/api/job/'+id); if(!r.ok)return;
+    const j=await r.json();
+    $('#console').textContent=j.log.join('\n');
+    $('#console').scrollTop=$('#console').scrollHeight;
+    if(j.status==='done'||j.status==='error'){
+      clearInterval(jobTimer);
+      $('#runbtn').disabled=false;
+      flash('Job '+j.status);
+      loadResults();
+      if(onDone)onDone(j);
+    }
+  },1200);
+}
+
+async function runTrial(){
+  const body={condition:$('#condition').value,
+              attack:$('#attack').value,
+              duration:parseInt($('#duration').value||'120')};
+  $('#runbtn').disabled=true;
+  const r=await fetch('/api/trial',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const d=await r.json();
+  if(d.error){flash(d.error);$('#runbtn').disabled=false;return;}
+  flash('Trial launched'); watchJob(d.job_id);
+}
+
+async function compose(action){
+  const r=await fetch('/api/compose',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action})});
+  const d=await r.json(); flash('Stack '+action); watchJob(d.job_id);
+}
+async function mirror(){
+  const r=await fetch('/api/mirror',{method:'POST'});
+  const d=await r.json(); flash('Installing mirror'); watchJob(d.job_id);
+}
+async function revalidate(dir,condition){
+  const r=await fetch('/api/validate',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dir,condition})});
+  const d=await r.json();
+  if(d.error){flash('validate failed');}else{flash('accuracy '+d.accuracy_pct+'%');}
+  loadResults();
+}
+
+// boot
+poll(); loadResults(); loadGT();
+setInterval(poll,3000);
+setInterval(loadResults,8000);
+</script>
+</body>
+</html>
