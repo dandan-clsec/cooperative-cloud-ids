@@ -1,0 +1,171 @@
+# =============================================================================
+# Cooperative Cloud IDS Framework - Single-Node Orchestration
+# Brings up the entire evaluation environment on one bridge network (ids_net).
+#   docker compose up -d
+#
+# Components:
+#   localstack  - AWS emulation plane (EC2, S3, VPC)
+#   target      - DVWA + SSH vulnerable surface
+#   snort       - Snort 3 passive detection engine
+#   suricata    - Suricata 7 multi-threaded detection engine
+#   prometheus  - telemetry accumulator (5s scrape)
+#   node-exporter - host/VM kernel metrics source
+# =============================================================================
+
+networks:
+  ids_net:
+    name: ids_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+volumes:
+  prometheus_data:
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # 1. Cloud Emulation Plane
+  # ---------------------------------------------------------------------------
+  localstack:
+    image: localstack/localstack:2.3.0
+    container_name: ids_localstack
+    environment:
+      - SERVICES=ec2,s3,ec2metadata # VPC primitives ship with the ec2 provider
+      - DEBUG=0
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - PERSISTENCE=0
+    ports:
+      - "4566:4566"       # LocalStack edge / unified endpoint
+      - "4571:4571"       # legacy service port
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.10
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 2. Vulnerable Target Surface (DVWA + SSH)
+  # ---------------------------------------------------------------------------
+  target:
+    build:
+      context: ./target
+      dockerfile: Dockerfile
+    image: ids_target:1.10
+    container_name: ids_target
+    hostname: dvwa-target
+    # A predictable veth/IP is required so the mirror + orchestrator can find it.
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.20
+    ports:
+      - "8090:80"         # DVWA web surface
+      - "2222:22"         # SSH (brute-force surface via Hydra)
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 3a. Snort 3 - single-threaded, signature based, PASSIVE
+  # ---------------------------------------------------------------------------
+  snort:
+    build:
+      context: ./snort
+      dockerfile: Dockerfile
+    image: ids_snort:3.1
+    container_name: ids_snort
+    # Run as the host user (not root) so alert_fast.txt/alert_json.txt land on
+    # the bind-mounted ./logs/snort owned by the host user, not root — the
+    # image grants the snort binary NET_ADMIN/NET_RAW via setcap so it can
+    # still open an AF_PACKET socket without being root.
+    user: "1000:1000"
+    # Attach directly to the bridge so the container's eth0 can sniff the
+    # mirrored copy of the traffic. NET_ADMIN + NET_RAW are required to put the
+    # interface into promiscuous mode and open raw AF_PACKET sockets.
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.30
+    volumes:
+      - ./rules:/etc/snort/rules:ro
+      - ./snort/snort.lua:/etc/snort/snort.lua:ro
+      - ./logs/snort:/var/log/snort
+    # -i eth0     : listen on the bridge-facing interface
+    # -q          : quiet startup
+    # -A alert_fast : compact single-line alerts to snort.log
+    # -k none     : do not drop on bad checksums (mirrored traffic has none)
+    command: >
+      snort -c /etc/snort/snort.lua
+            -i eth0
+            -q -k none
+            -l /var/log/snort
+            --daq afpacket
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 3b. Suricata 7 - multi-threaded, protocol aware, PASSIVE
+  # ---------------------------------------------------------------------------
+  suricata:
+    image: jasonish/suricata:7.0.3
+    container_name: ids_suricata
+    environment:
+      # Match the host user so the entrypoint's chown of bind-mounted
+      # configs/rules doesn't hand ownership of host files to a container UID.
+      - PUID=1000
+      - PGID=1000
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.31
+    volumes:
+      - ./rules:/var/lib/suricata/rules
+      - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml
+      - ./logs/suricata:/var/log/suricata
+    # -i eth0 puts Suricata into live capture on the bridge interface.
+    command: >
+      -c /etc/suricata/suricata.yaml
+      -i eth0
+      --runmode workers
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 4a. Node Exporter - host/VM kernel metric source
+  # ---------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: ids_node_exporter
+    # Note: pid:host and /:/host mount removed for Docker Desktop on Windows
+    # (root filesystem is not a shared/slave mount in Docker Desktop).
+    # node-exporter still exposes container-level CPU/memory metrics.
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.40
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 4b. Prometheus - telemetry accumulator (5s resolution)
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: ids_prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.41
+    ports:
+      - "9090:9090"
+    depends_on:
+      - node-exporter
+    restart: unless-stopped
